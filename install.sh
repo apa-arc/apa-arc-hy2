@@ -428,8 +428,16 @@ main(){
   choose_port
   choose_protocols
   choose_auth
-  local ver; ver="$(latest_release)" || die "无法获取 sing-box 最新版本"
-  download_binary "$ver" || die "sing-box 下载或安装失败"
+  if [[ -x "$BIN" ]] && "$BIN" version >/dev/null 2>&1; then
+    local installed_ver
+    installed_ver="$("$BIN" version 2>/dev/null | awk 'NR==1{print $3}')"
+    say "检测到 sing-box 已安装（版本：${installed_ver:-未知}），跳过下载和安装。"
+  else
+    say "未检测到可用的 sing-box，开始下载安装..."
+    local ver
+    ver="$(latest_release)" || die "无法获取 sing-box 最新版本"
+    download_binary "$ver" || die "sing-box 下载或安装失败"
+  fi
   configure_service
   write_clients
   tune_kernel
