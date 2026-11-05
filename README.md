@@ -15,8 +15,10 @@ bash <(curl -fsSL https://raw.githubusercontent.com/apa-arc/apa-arc-hy2/main/ins
 - UDP 端口由用户手动选择
 - 支持域名 Let's Encrypt 证书（HTTP-01，需要 TCP 80 可访问）或自动生成带 IP SAN 的自签名证书
 - 自动获取并安装 sing-box 最新正式版
-- 同一台服务器同时部署四种协议：Hysteria 2 + Salamander、VLESS Reality、Trojan TLS、Shadowsocks 2022\n- VLESS Reality 自动生成密钥、UUID 和 short ID；Trojan 复用所选 TLS 证书
-- 分别输出四种协议的分享链接，并合并为 all-nodes.txt 节点集合\n- 输出 sing-box 客户端 JSON 和 Clash Meta YAML，包含四种协议
+- 同一台服务器同时部署四种协议：Hysteria 2 + Salamander、VLESS Reality、Trojan TLS、Shadowsocks 2022
+- VLESS Reality 自动生成密钥、UUID 和 short ID；Trojan 复用所选 TLS 证书
+- 分别输出四种协议的分享链接，并合并为 all-nodes.txt 节点集合
+- 输出 sing-box 客户端 JSON 和 Clash Meta YAML，包含四种协议
 - 在内核支持时启用 BBR，并设置 FQ 与基础 UDP 缓冲区参数
 - systemd 系统每周检查 sing-box 更新；更新前备份二进制，配置校验失败或服务启动失败时回滚
 - 安装完成后保留配置、端口、密码和证书；更新只替换 sing-box 程序，不重写服务端配置
@@ -25,7 +27,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/apa-arc/apa-arc-hy2/main/ins
 
 安装后生成在服务器 `/root/sing-box/`：
 
-- `all-nodes.txt`：四种协议的完整节点链接集合\n- `hy2.txt`：HY2 节点 URI\n- `vless-reality.txt`：VLESS Reality 节点 URI\n- `trojan.txt`：Trojan TLS 节点 URI\n- `shadowsocks-2022.txt`：Shadowsocks 2022 节点 URI
+- `all-nodes.txt`：四种协议的完整节点链接集合
+- `hy2.txt`：HY2 节点 URI
+- `vless-reality.txt`：VLESS Reality 节点 URI
+- `trojan.txt`：Trojan TLS 节点 URI
+- `shadowsocks-2022.txt`：Shadowsocks 2022 节点 URI
 - `sing-box-client.json`：sing-box 客户端配置
 - `clash-meta.yaml`：Clash Meta 节点配置
 
