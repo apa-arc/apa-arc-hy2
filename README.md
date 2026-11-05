@@ -12,13 +12,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/apa-arc/apa-arc-hy2/main/ins
 
 - 自动识别 Debian、Ubuntu、Alpine、RHEL/CentOS/Rocky/AlmaLinux/Fedora 系统及 CPU 架构
 - 自动检测公网 IPv4 / IPv6，并支持自动选择或手动输入节点 IP / 域名
-- UDP 端口由用户手动选择
+- 安装时由用户手动输入 HY2 UDP、VLESS Reality TCP、Trojan TLS TCP 端口；校验端口范围并检查冲突，不自动使用预设端口
 - 支持域名 Let's Encrypt 证书（HTTP-01，需要 TCP 80 可访问）或自动生成带 IP SAN 的自签名证书
 - 自动获取并安装 sing-box 最新正式版
-- 同一台服务器同时部署四种协议：Hysteria 2 + Salamander、VLESS Reality、Trojan TLS、Shadowsocks 2022
+- 部署三种协议：Hysteria 2 + Salamander、VLESS Reality、Trojan TLS
 - VLESS Reality 自动生成密钥、UUID 和 short ID；Trojan 复用所选 TLS 证书
-- 分别输出四种协议的分享链接，并合并为 all-nodes.txt 节点集合
-- 输出 sing-box 客户端 JSON 和 Clash Meta YAML，包含四种协议
+- 分别输出三种协议的分享链接，并合并为 all-nodes.txt 节点集合
+- 输出 sing-box 客户端 JSON 和 Clash Meta YAML，均只包含上述三种协议
 - 在内核支持时启用 BBR，并设置 FQ 与基础 UDP 缓冲区参数
 - systemd 系统每周检查 sing-box 更新；更新前备份二进制，配置校验失败或服务启动失败时回滚
 - 安装完成后保留配置、端口、密码和证书；更新只替换 sing-box 程序，不重写服务端配置
@@ -27,12 +27,11 @@ bash <(curl -fsSL https://raw.githubusercontent.com/apa-arc/apa-arc-hy2/main/ins
 
 安装后生成在服务器 `/root/sing-box/`：
 
-- `all-nodes.txt`：四种协议的完整节点链接集合
+- `all-nodes.txt`：三种协议的完整节点链接集合
 - `subscription.txt`：Base64 编码订阅内容
 - `hy2.txt`：HY2 节点 URI
 - `vless-reality.txt`：VLESS Reality 节点 URI
 - `trojan.txt`：Trojan TLS 节点 URI
-- `shadowsocks-2022.txt`：Shadowsocks 2022 节点 URI
 - `sing-box-client.json`：sing-box 客户端配置
 - `clash-meta.yaml`：Clash Meta 节点配置
 
@@ -54,4 +53,5 @@ rc-service sing-box status
 - 域名证书申请使用 ACME standalone HTTP-01，域名必须解析到本机，且 TCP 80 端口申请时可用。
 - IP 证书为自签名证书，客户端配置会启用跳过证书验证；请妥善保护节点 URI 和密码。
 - 脚本不会强制更换内核。BBR 不受当前内核支持时会提示，不会盲目升级内核。
-- 当前版本聚焦 HY2 服务端与多客户端格式导出。JD 专项加速模块尚未纳入：此前对话没有可核验的 JD 脚本原文/下载地址，因此不会擅自执行来源不明的远程脚本。
+- Shadowsocks 2022 已从服务端协议和客户端配置/节点导出中移除。
+- JD 专项加速模块尚未纳入：目前没有可核验的 JD 脚本原文/下载地址，不会擅自执行来源不明的远程脚本。
