@@ -246,7 +246,7 @@ download_binary(){
     return 1
   fi
   member="sing-box-${version}-linux-${SB_ARCH}${libc_suffix}/sing-box"
-  if ! tar -tzf "$tmp/sb.tar.gz" | grep -Fxq "$member"; then
+  if ! tar -tzf "$tmp/sb.tar.gz" | grep -Fx "$member" >/dev/null; then
     warn "压缩包中没有 sing-box 可执行文件"
     rm -rf "$tmp"
     return 1
@@ -454,8 +454,8 @@ echo "[1/4] 下载 sing-box v$V"
 curl -fL --retry 3 --connect-timeout 15 "$URL" -o "$T/sb.tgz"
 echo "[2/4] 检查压缩包完整性"
 tar -tzf "$T/sb.tgz" >/dev/null
-M="sing-box-${V}-linux-${SB_ARCH}${LIBC_SUFFIX}/sing-box"
-tar -tzf "$T/sb.tgz" | grep -Fxq "$M" || { echo "压缩包中未找到 sing-box：$M"; exit 1; }
+M="sing-box-${V}-linux-${A}${LIBC_SUFFIX}/sing-box"
+tar -tzf "$T/sb.tgz" | grep -Fx "$M" >/dev/null || { echo "压缩包中未找到 sing-box：$M"; exit 1; }
 echo "[3/4] 直接提取二进制（不展开整个目录）"
 tar -xOzf "$T/sb.tgz" "$M" > "$T/sing-box.new"
 C="$T/sing-box.new"
