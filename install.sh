@@ -293,6 +293,9 @@ write_clients(){
     "$VLESS_UUID" "$uri_host" "$VLESS_PORT" "$qrsni" "$REALITY_PUBLIC" "$REALITY_SHORT_ID" "$NODE_HOST" > "$EXPORT_DIR/vless-reality.txt"
   printf 'trojan://%s@%s:%s?security=tls&sni=%s%s#Trojan-TLS-%s\n' \
     "$qtpass" "$uri_host" "$TROJAN_PORT" "$qsni" "$insecure_param" "$NODE_HOST" > "$EXPORT_DIR/trojan.txt"
+  # Build the combined node list before encoding it as a subscription.
+  cat "$EXPORT_DIR/hy2.txt" "$EXPORT_DIR/vless-reality.txt" "$EXPORT_DIR/trojan.txt" > "$EXPORT_DIR/all-nodes.txt"
+  [[ -s "$EXPORT_DIR/all-nodes.txt" ]] || die "节点集合生成失败：all-nodes.txt 为空"
   base64 "$EXPORT_DIR/all-nodes.txt" | tr -d '\n' > "$EXPORT_DIR/subscription.txt"
   jq -n --arg host "$NODE_HOST" --argjson hp "$PORT" --arg hpass "$PASSWORD" --arg obfs "$OBFS_PASSWORD" --arg hsni "$SNI" --argjson insecure "$INSECURE" \
     --arg uuid "$VLESS_UUID" --argjson vp "$VLESS_PORT" --arg rsni "$REALITY_SNI" --arg rpub "$REALITY_PUBLIC" --arg rsid "$REALITY_SHORT_ID" \
