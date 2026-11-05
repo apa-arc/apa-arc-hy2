@@ -147,10 +147,44 @@ choose_host(){
   say "节点地址：$HOST（$IP_FAMILY）"
 }
 choose_port(){
-  PORT="$(ask '请输入起始端口（HY2 使用此端口，VLESS/Trojan 自动递增 10/20）：')"
-  [[ "$PORT" =~ ^[0-9]+$ ]] && ((PORT>=1 && PORT<=65515)) || die "起始端口必须为 1-65515，确保递增 20 后不超过 65535"
-  VLESS_PORT=$((PORT + 10))
-  TROJAN_PORT=$((PORT + 20))
+  echo "端口分配方式："
+  echo "1) 递进模式：输入 HY2 起始端口，VLESS/Trojan 自动 +10/+20"
+  echo "2) 分别指定：分别输入 HY2、VLESS Reality、Trojan TLS 端口"
+  local mode
+  mode="$(ask '请选择 [1/2，默认1]：' 1)"
+  local raw
+  case "$mode" in
+    1)
+      raw="$(ask '请输入起始端口（HY2 使用此端口，VLESS/Trojan 自动递增 10/20）：')"
+      [[ "$raw" =~ ^[0-9]+$ ]] || die "端口必须是数字"
+      PORT=$((10#$raw))
+      ((PORT>=1 && PORT<=65515)) || die "起始端口必须为 1-65515，确保递增 20 后不超过 65535"
+      VLESS_PORT=$((PORT + 10))
+      TROJAN_PORT=$((PORT + 20))
+      ;;
+    2)
+      raw="$(ask '请输入 HY2 UDP 端口：')"
+      [[ "$raw" =~ ^[0-9]+$ ]] || die "HY2 端口必须是数字"
+      PORT=$((10#$raw))
+      ((PORT>=1 && PORT<=65535)) || die "HY2 端口必须为 1-65535"
+
+      raw="$(ask '请输入 VLESS Reality TCP 端口：')"
+      [[ "$raw" =~ ^[0-9]+$ ]] || die "VLESS Reality 端口必须是数字"
+      VLESS_PORT=$((10#$raw))
+      ((VLESS_PORT>=1 && VLESS_PORT<=65535)) || die "VLESS Reality 端口必须为 1-65535"
+
+      raw="$(ask '请输入 Trojan TLS TCP 端口：')"
+      [[ "$raw" =~ ^[0-9]+$ ]] || die "Trojan TLS 端口必须是数字"
+      TROJAN_PORT=$((10#$raw))
+      ((TROJAN_PORT>=1 && TROJAN_PORT<=65535)) || die "Trojan TLS 端口必须为 1-65535"
+
+      # VLESS and Trojan both use TCP and cannot bind the same address/port.
+      ((VLESS_PORT != TROJAN_PORT)) || die "VLESS Reality 和 Trojan TLS 都使用 TCP，不能指定相同端口"
+      ;;
+    *)
+      die "选择无效，请输入 1 或 2"
+      ;;
+  esac
   say "端口分配：HY2 UDP=$PORT，VLESS Reality TCP=$VLESS_PORT，Trojan TLS TCP=$TROJAN_PORT"
 }
 choose_protocols(){
