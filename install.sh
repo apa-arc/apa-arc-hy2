@@ -4,6 +4,36 @@
 set -Eeuo pipefail
 umask 077
 
+# Always check the repository's latest installer before doing any installation work.
+# The guard prevents the freshly downloaded copy from checking itself again.
+if [[ "${APA_ARC_INSTALLER_UPDATED:-0}" != "1" ]]; then
+  if command -v curl >/dev/null 2>&1; then
+    _self_tmp="$(mktemp)"
+    _self_url="https://raw.githubusercontent.com/apa-arc/apa-arc-hy2/main/install.sh"
+    if curl -fsSL --retry 2 --connect-timeout 8 "$_self_url" -o "$_self_tmp"; then
+      if bash -n "$_self_tmp"; then
+        echo "[HY2] 已检查 GitHub 最新安装脚本，正在使用仓库最新版启动..."
+        if APA_ARC_INSTALLER_UPDATED=1 bash "$_self_tmp" "$@"; then
+          _self_rc=0
+        else
+          _self_rc=$?
+        fi
+        rm -f "$_self_tmp"
+        exit "$_self_rc"
+      else
+        echo "[HY2] 远程脚本语法检查失败，停止运行以避免执行损坏版本。" >&2
+        rm -f "$_self_tmp"
+        exit 1
+      fi
+    else
+      echo "[HY2] 无法连接 GitHub 获取最新脚本，将继续运行当前版本。" >&2
+      rm -f "$_self_tmp"
+    fi
+  else
+    echo "[HY2] 当前系统没有 curl，无法检查脚本更新。" >&2
+  fi
+fi
+
 APP="sing-box"
 BIN="/usr/local/bin/sing-box"
 CONF_DIR="/etc/sing-box"
