@@ -296,7 +296,7 @@ write_clients(){
   # Build the combined node list before encoding it as a subscription.
   cat "$EXPORT_DIR/hy2.txt" "$EXPORT_DIR/vless-reality.txt" "$EXPORT_DIR/trojan.txt" > "$EXPORT_DIR/all-nodes.txt"
   [[ -s "$EXPORT_DIR/all-nodes.txt" ]] || die "节点集合生成失败：all-nodes.txt 为空"
-  base64 "$EXPORT_DIR/all-nodes.txt" | tr -d '\n' > "$EXPORT_DIR/subscription.txt"
+  rm -f "$EXPORT_DIR/subscription.txt"
   jq -n --arg host "$NODE_HOST" --argjson hp "$PORT" --arg hpass "$PASSWORD" --arg obfs "$OBFS_PASSWORD" --arg hsni "$SNI" --argjson insecure "$INSECURE" \
     --arg uuid "$VLESS_UUID" --argjson vp "$VLESS_PORT" --arg rsni "$REALITY_SNI" --arg rpub "$REALITY_PUBLIC" --arg rsid "$REALITY_SHORT_ID" \
     --arg tpass "$TROJAN_PASSWORD" --argjson tp "$TROJAN_PORT" \
@@ -460,7 +460,6 @@ show_result(){
   cat "$EXPORT_DIR/trojan.txt"
   echo
   echo "节点链接集合：$EXPORT_DIR/all-nodes.txt"
-  echo "Base64 订阅：$EXPORT_DIR/subscription.txt"
   echo "sing-box 客户端配置：$EXPORT_DIR/sing-box-client.json"
   echo "Clash Meta 配置：$EXPORT_DIR/clash-meta.yaml"
   echo "服务状态：systemctl status sing-box（OpenRC 使用 rc-service sing-box status）"
