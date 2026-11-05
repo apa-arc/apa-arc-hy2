@@ -65,13 +65,47 @@ detect_os(){
   say "系统：$PRETTY_NAME；架构：$ARCH；包管理器：$PM"
 }
 install_deps(){
-  say "安装依赖"
+  local -a missing=()
+  local pkg cmd
+  # Check each required command first; only install packages whose commands are absent.
+  local -a required_cmds=(curl jq openssl tar gzip ip bash)
+  local -a package_names=(curl jq openssl tar gzip iproute2 bash)
+  for i in "${!required_cmds[@]}"; do
+    cmd="${required_cmds[$i]}"
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      missing+=("${package_names[$i]}")
+    fi
+  done
+  # CA certificates are needed for HTTPS downloads even when curl already exists.
+  if [[ ! -s /etc/ssl/certs/ca-certificates.crt && ! -s /etc/ssl/cert.pem ]]; then
+    missing+=(ca-certificates)
+  fi
+  if (("${#missing[@]}" == 0)); then
+    say "依赖检测完成：curl、jq、openssl、CA 证书、tar、gzip、ip、bash 均已存在，跳过依赖安装。"
+    return 0
+  fi
+  say "缺少依赖：${missing[*]}；只安装缺少的组件。"
   case "$PM" in
-    apt) export DEBIAN_FRONTEND=noninteractive; apt-get update -y; apt-get install -y curl jq openssl ca-certificates tar gzip iproute2 ;;
-    apk) apk add --no-cache curl jq openssl ca-certificates tar gzip iproute2 bash ;;
-    dnf) dnf install -y curl jq openssl ca-certificates tar gzip iproute ;;
-    yum) yum install -y curl jq openssl ca-certificates tar gzip iproute ;;
+    apt)
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      apt-get install -y "${missing[@]}"
+      ;;
+    apk)
+      apk add --no-cache "${missing[@]}"
+      ;;
+    dnf)
+      dnf install -y "${missing[@]/iproute2/iproute}"
+      ;;
+    yum)
+      yum install -y "${missing[@]/iproute2/iproute}"
+      ;;
   esac
+  for cmd in "${required_cmds[@]}"; do
+    command -v "$cmd" >/dev/null 2>&1 || die "依赖安装后仍缺少命令：$cmd"
+  done
+  [[ -s /etc/ssl/certs/ca-certificates.crt || -s /etc/ssl/cert.pem ]] || die "CA 证书安装后仍不可用"
+  say "缺失依赖已补齐。"
 }
 detect_ips(){
   IPV4="$(curl -4fsS --max-time 8 https://api.ipify.org 2>/dev/null || true)"
