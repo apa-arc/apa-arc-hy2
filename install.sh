@@ -74,6 +74,7 @@ choose_port(){
 }
 choose_protocols(){
   say "将额外配置协议节点：VLESS Reality、Trojan TLS"
+  VLESS_PORT="$(ask '请输入 VLESS Reality TCP 端口（1-65535）：')"
   TROJAN_PORT="$(ask '请输入 Trojan TLS TCP 端口（1-65535）：')"
   for p in "$PORT" "$VLESS_PORT" "$TROJAN_PORT"; do
     [[ "$p" =~ ^[0-9]+$ ]] && ((p>=1 && p<=65535)) || die "端口必须为 1-65535"
