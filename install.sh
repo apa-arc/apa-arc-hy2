@@ -207,7 +207,7 @@ configure_service(){
       inbounds:[
         {type:"hysteria2",tag:"hy2-in",listen:$listen,listen_port:$hy2port,users:[{password:$hy2pass}],obfs:{type:"salamander",password:$obfs},tls:{enabled:true,certificate_path:$cert,key_path:$key}},
         {type:"vless",tag:"vless-reality-in",listen:$listen,listen_port:$vport,users:[{uuid:$uuid,flow:"xtls-rprx-vision"}],tls:{enabled:true,server_name:$rsni,reality:{enabled:true,handshake:{server:$rsni,server_port:443},private_key:$rpriv,short_id:[$rsid]}}},
-        {type:"trojan",tag:"trojan-in",listen:$listen,listen_port:$tport,users:[{password:$tpass}],tls:{enabled:true,certificate_path:$cert,key_path:$key}}
+        {type:"trojan",tag:"trojan-in",listen:$listen,listen_port:$tp,users:[{password:$tpass}],tls:{enabled:true,certificate_path:$cert,key_path:$key}}
       ],
       outbounds:[{type:"direct",tag:"direct"}]
     }' > "$CONF"
