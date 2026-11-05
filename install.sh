@@ -287,11 +287,11 @@ write_clients(){
   qpass="$(urlencode "$PASSWORD")"; qobfs="$(urlencode "$OBFS_PASSWORD")"; qsni="$(urlencode "$SNI")"
   qtpass="$(urlencode "$TROJAN_PASSWORD")"; qrsni="$(urlencode "$REALITY_SNI")"
   local insecure_param=""; $INSECURE && insecure_param="&insecure=1"
-  printf 'hysteria2://%s@%s:%s/?obfs=salamander&obfs-password=%s&sni=%s%s#HY2-%s\n' \
+  printf 'hysteria2://%s@%s:%s/?obfs=salamander&obfs-password=%s&sni=%s%s#HY2\n' \
     "$qpass" "$uri_host" "$PORT" "$qobfs" "$qsni" "$insecure_param" "$NODE_HOST" > "$EXPORT_DIR/hy2.txt"
-  printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#VLESS-Reality-%s\n' \
+  printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#VLESS-Reality\n' \
     "$VLESS_UUID" "$uri_host" "$VLESS_PORT" "$qrsni" "$REALITY_PUBLIC" "$REALITY_SHORT_ID" "$NODE_HOST" > "$EXPORT_DIR/vless-reality.txt"
-  printf 'trojan://%s@%s:%s?security=tls&sni=%s%s#Trojan-TLS-%s\n' \
+  printf 'trojan://%s@%s:%s?security=tls&sni=%s%s#Trojan-TLS\n' \
     "$qtpass" "$uri_host" "$TROJAN_PORT" "$qsni" "$insecure_param" "$NODE_HOST" > "$EXPORT_DIR/trojan.txt"
   # Build the combined node list before encoding it as a subscription.
   cat "$EXPORT_DIR/hy2.txt" "$EXPORT_DIR/vless-reality.txt" "$EXPORT_DIR/trojan.txt" > "$EXPORT_DIR/all-nodes.txt"
@@ -307,7 +307,7 @@ write_clients(){
     ]}' > "$EXPORT_DIR/sing-box-client.json"
   cat >"$EXPORT_DIR/clash-meta.yaml" <<EOF
 proxies:
-  - name: HY2-$NODE_HOST
+  - name: HY2
     type: hysteria2
     server: $NODE_HOST
     port: $PORT
@@ -316,7 +316,7 @@ proxies:
     obfs-password: "$OBFS_PASSWORD"
     sni: "$SNI"
     skip-cert-verify: $INSECURE
-  - name: VLESS-Reality-$NODE_HOST
+  - name: VLESS-Reality
     type: vless
     server: $NODE_HOST
     port: $VLESS_PORT
@@ -329,7 +329,7 @@ proxies:
     reality-opts:
       public-key: $REALITY_PUBLIC
       short-id: $REALITY_SHORT_ID
-  - name: Trojan-TLS-$NODE_HOST
+  - name: Trojan-TLS
     type: trojan
     server: $NODE_HOST
     port: $TROJAN_PORT
@@ -451,6 +451,14 @@ show_result(){
   echo "密码：$PASSWORD"
   echo "混淆密码：$OBFS_PASSWORD"
   echo "证书验证跳过：$INSECURE"
+  echo "===== 三协议节点链接（别名仅显示协议名称）====="
+  echo "[HY2]"
+  cat "$EXPORT_DIR/hy2.txt"
+  echo "[VLESS-Reality]"
+  cat "$EXPORT_DIR/vless-reality.txt"
+  echo "[Trojan-TLS]"
+  cat "$EXPORT_DIR/trojan.txt"
+  echo
   echo "节点链接集合：$EXPORT_DIR/all-nodes.txt"
   echo "Base64 订阅：$EXPORT_DIR/subscription.txt"
   echo "sing-box 客户端配置：$EXPORT_DIR/sing-box-client.json"
