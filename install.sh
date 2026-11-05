@@ -226,27 +226,49 @@ latest_release(){
     jq -er '.tag_name' | sed 's/^v//'
 }
 download_binary(){
-  local version="$1" tmp url libc_suffix=""
-  tmp="$(mktemp -d)"
+  local version="$1" tmp url libc_suffix="" member
+  # Use disk-backed /var/tmp, not /tmp (often tmpfs). On 128 MiB VPS,
+  # keeping both the 30 MiB archive and extracted binary in RAM can stall the host.
+  tmp="$(mktemp -d /var/tmp/sing-box.XXXXXX)" || return 1
   # Alpine uses musl libc; download the matching official musl build.
   [[ "$OS_ID" == "alpine" ]] && libc_suffix="-musl"
   url="https://github.com/SagerNet/sing-box/releases/download/v${version}/sing-box-${version}-linux-${SB_ARCH}${libc_suffix}.tar.gz"
-  say "下载 sing-box v$version（${OS_ID} / ${SB_ARCH}${libc_suffix}）"
-  curl -fL --retry 3 "$url" -o "$tmp/sb.tar.gz" || { rm -rf "$tmp"; return 1; }
-  tar -xzf "$tmp/sb.tar.gz" -C "$tmp"
-  local candidate; candidate="$(find "$tmp" -type f -name sing-box -perm -u+x | head -n1)"
-  [[ -n "$candidate" ]] || { rm -rf "$tmp"; return 1; }
-  install -m 0755 "$candidate" "${tmp}/sing-box.new"
-  # Validate the extracted binary before replacing any existing installation.
-  "${tmp}/sing-box.new" version >/dev/null 2>&1 || {
+  say "[1/4] 下载 sing-box v$version（${OS_ID} / ${SB_ARCH}${libc_suffix}）"
+  if ! curl -fL --retry 3 --connect-timeout 15 "$url" -o "$tmp/sb.tar.gz"; then
+    warn "sing-box 下载失败"
+    rm -rf "$tmp"
+    return 1
+  fi
+  say "[2/4] 下载完成，检查压缩包完整性"
+  if ! tar -tzf "$tmp/sb.tar.gz" >/dev/null; then
+    warn "sing-box 压缩包损坏或不完整"
+    rm -rf "$tmp"
+    return 1
+  fi
+  member="$(tar -tzf "$tmp/sb.tar.gz" | awk '$NF == "sing-box" {print; exit}')"
+  if [[ -z "$member" ]]; then
+    warn "压缩包中没有 sing-box 可执行文件"
+    rm -rf "$tmp"
+    return 1
+  fi
+  say "[3/4] 正在直接提取 sing-box（二进制，不展开整个目录）"
+  if ! tar -xOzf "$tmp/sb.tar.gz" "$member" > "$tmp/sing-box.new"; then
+    warn "sing-box 二进制提取失败"
+    rm -rf "$tmp"
+    return 1
+  fi
+  chmod 0755 "$tmp/sing-box.new"
+  say "[4/4] 验证二进制并安装"
+  "$tmp/sing-box.new" version >/dev/null 2>&1 || {
     warn "sing-box 二进制无法在当前系统运行（系统 libc 或架构可能不匹配）"
     rm -rf "$tmp"
     return 1
   }
   mkdir -p "$(dirname "$BIN")"
   if [[ -x "$BIN" ]]; then cp -a "$BIN" "${BIN}.bak"; fi
-  install -m 0755 "${tmp}/sing-box.new" "$BIN"
+  install -m 0755 "$tmp/sing-box.new" "$BIN"
   rm -rf "$tmp"
+  say "sing-box 已安装：$("$BIN" version | head -n1)"
 }
 configure_service(){
   mkdir -p "$CONF_DIR" "$EXPORT_DIR" "$BACKUP_DIR"
@@ -428,10 +450,17 @@ if [[ "$V" == "$CUR" ]]; then echo "sing-box 已是最新版本：$CUR"; exit 0;
 echo "准备更新 sing-box：$CUR -> $V"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
 URL="https://github.com/SagerNet/sing-box/releases/download/v$V/sing-box-$V-linux-$A$LIBC_SUFFIX.tar.gz"
-curl -fL --retry 3 "$URL" -o "$T/sb.tgz"
-tar -xzf "$T/sb.tgz" -C "$T"
-C="$(find "$T" -type f -name sing-box -perm -u+x | head -n1)"
-[[ -n "$C" ]] || { echo "压缩包中未找到 sing-box"; exit 1; }
+echo "[1/4] 下载 sing-box v$V"
+curl -fL --retry 3 --connect-timeout 15 "$URL" -o "$T/sb.tgz"
+echo "[2/4] 检查压缩包完整性"
+tar -tzf "$T/sb.tgz" >/dev/null
+M="$(tar -tzf "$T/sb.tgz" | awk '$NF == "sing-box" {print; exit}')"
+[[ -n "$M" ]] || { echo "压缩包中未找到 sing-box"; exit 1; }
+echo "[3/4] 直接提取二进制（不展开整个目录）"
+tar -xOzf "$T/sb.tgz" "$M" > "$T/sing-box.new"
+C="$T/sing-box.new"
+chmod 0755 "$C"
+echo "[4/4] 验证新二进制"
 "$C" version >/dev/null 2>&1 || { echo "新版本二进制无法在当前系统运行"; exit 1; }
 "$C" check -c "$CONF"
 STAMP="$(date +%Y%m%d%H%M%S)"
