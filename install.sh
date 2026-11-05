@@ -56,16 +56,32 @@ detect_ips(){
 }
 choose_host(){
   echo "选择节点地址："
-  echo "1) 自动选择（优先 IPv4，其次 IPv6）"
-  echo "2) 手动输入 IPv4/IPv6 地址或域名"
-  local c; c="$(ask '请选择 [1/2，默认1]：' 1)"
-  if [[ "$c" == 2 ]]; then
-    HOST="$(ask '输入节点 IP 或域名：')"
-    [[ -n "$HOST" ]] || die "地址不能为空"
+  if [[ -n "$IPV4" ]]; then
+    echo "1) IPv4：$IPV4"
   else
-    if [[ -n "$IPV4" ]]; then HOST="$IPV4"; else HOST="$IPV6"; fi
+    echo "1) IPv4：不可用"
   fi
-  if [[ "$HOST" == *:* ]]; then IP_FAMILY="ipv6"; else IP_FAMILY="ipv4"; fi
+  if [[ -n "$IPV6" ]]; then
+    echo "2) IPv6：$IPV6"
+  else
+    echo "2) IPv6：不可用"
+  fi
+  local c; c="$(ask '请选择 [1/2]：')"
+  case "$c" in
+    1)
+      [[ -n "$IPV4" ]] || die "当前服务器没有可用的公网 IPv4 地址"
+      HOST="$IPV4"
+      IP_FAMILY="ipv4"
+      ;;
+    2)
+      [[ -n "$IPV6" ]] || die "当前服务器没有可用的公网 IPv6 地址"
+      HOST="$IPV6"
+      IP_FAMILY="ipv6"
+      ;;
+    *)
+      die "选择无效，请输入 1（IPv4）或 2（IPv6）"
+      ;;
+  esac
   say "节点地址：$HOST（$IP_FAMILY）"
 }
 choose_port(){
