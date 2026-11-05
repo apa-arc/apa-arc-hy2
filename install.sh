@@ -72,6 +72,19 @@ choose_port(){
   PORT="$(ask '请输入 HY2 UDP 端口 [默认443]：' 443)"
   [[ "$PORT" =~ ^[0-9]+$ ]] && ((PORT>=1 && PORT<=65535)) || die "端口必须为 1-65535"
 }
+choose_protocols(){
+  say "将额外配置常用协议节点：VLESS Reality、Trojan TLS、Shadowsocks 2022"
+  VLESS_PORT="$(ask 'VLESS Reality TCP 端口 [默认8443]：' 8443)"
+  TROJAN_PORT="$(ask 'Trojan TLS TCP 端口 [默认8444]：' 8444)"
+  SS_PORT="$(ask 'Shadowsocks 2022 TCP/UDP 端口 [默认8388]：' 8388)"
+  for p in "$PORT" "$VLESS_PORT" "$TROJAN_PORT" "$SS_PORT"; do
+    [[ "$p" =~ ^[0-9]+$ ]] && ((p>=1 && p<=65535)) || die "端口必须为 1-65535"
+  done
+  [[ "$PORT" != "$VLESS_PORT" && "$PORT" != "$TROJAN_PORT" && "$PORT" != "$SS_PORT" &&
+     "$VLESS_PORT" != "$TROJAN_PORT" && "$VLESS_PORT" != "$SS_PORT" && "$TROJAN_PORT" != "$SS_PORT" ]] || die "不同服务不能使用相同端口"
+  REALITY_SNI="$(ask 'VLESS Reality 伪装 SNI [默认www.microsoft.com]：' www.microsoft.com)"
+  [[ "$REALITY_SNI" == *.* && "$REALITY_SNI" != *://* ]] || die "Reality SNI 格式不正确"
+}
 choose_auth(){
   echo "证书方式："
   echo "1) 使用自己的域名，自动申请 Let's Encrypt 证书（需要域名解析到本机，TCP 80 可用）"
@@ -125,11 +138,33 @@ configure_service(){
   mkdir -p "$CONF_DIR" "$EXPORT_DIR" "$BACKUP_DIR"
   PASSWORD="$(openssl rand -hex 18)"
   OBFS_PASSWORD="$(openssl rand -hex 18)"
-  jq -n --arg listen "$([[ "$IP_FAMILY" == ipv6 ]] && echo '::' || echo '0.0.0.0')" \
-    --argjson port "$PORT" --arg pass "$PASSWORD" --arg obfs "$OBFS_PASSWORD" \
-    --arg cert "$CERT" --arg key "$KEY" \
-    '{log:{level:"info",timestamp:true},inbounds:[{type:"hysteria2",tag:"hy2-in",listen:$listen,listen_port:$port,users:[{password:$pass}],obfs:{type:"salamander",password:$obfs},tls:{enabled:true,certificate_path:$cert,key_path:$key}}],outbounds:[{type:"direct",tag:"direct"}]}' > "$CONF"
+  VLESS_UUID="$(cat /proc/sys/kernel/random/uuid)"
+  TROJAN_PASSWORD="$(openssl rand -hex 20)"
+  SS_PASSWORD="$(openssl rand -base64 16 | tr -d '\n')"
+  REALITY_KEYS="$("$BIN" generate reality-keypair)"
+  REALITY_PRIVATE="$(printf '%s\n' "$REALITY_KEYS" | awk -F': *' '/PrivateKey/{print $2; exit}')"
+  REALITY_PUBLIC="$(printf '%s\n' "$REALITY_KEYS" | awk -F': *' '/PublicKey/{print $2; exit}')"
+  REALITY_SHORT_ID="$(openssl rand -hex 4)"
+  [[ -n "$REALITY_PRIVATE" && -n "$REALITY_PUBLIC" ]] || die "Reality 密钥生成失败，请检查 sing-box 版本"
+  local listen
+  listen="$([[ "$IP_FAMILY" == ipv6 ]] && echo '::' || echo '0.0.0.0')"
+  jq -n --arg listen "$listen" --argjson hy2port "$PORT" --arg hy2pass "$PASSWORD" --arg obfs "$OBFS_PASSWORD" \
+    --arg cert "$CERT" --arg key "$KEY" --argjson vport "$VLESS_PORT" --arg uuid "$VLESS_UUID" \
+    --arg rpriv "$REALITY_PRIVATE" --arg rsid "$REALITY_SHORT_ID" --arg rsni "$REALITY_SNI" \
+    --argjson tport "$TROJAN_PORT" --arg tpass "$TROJAN_PASSWORD" \
+    --argjson ssport "$SS_PORT" --arg sspass "$SS_PASSWORD" \
+    '{
+      log:{level:"info",timestamp:true},
+      inbounds:[
+        {type:"hysteria2",tag:"hy2-in",listen:$listen,listen_port:$hy2port,users:[{password:$hy2pass}],obfs:{type:"salamander",password:$obfs},tls:{enabled:true,certificate_path:$cert,key_path:$key}},
+        {type:"vless",tag:"vless-reality-in",listen:$listen,listen_port:$vport,users:[{uuid:$uuid,flow:"xtls-rprx-vision"}],tls:{enabled:true,server_name:$rsni,reality:{enabled:true,handshake:{server:$rsni,server_port:443},private_key:$rpriv,short_id:[$rsid]}}},
+        {type:"trojan",tag:"trojan-in",listen:$listen,listen_port:$tport,users:[{password:$tpass}],tls:{enabled:true,certificate_path:$cert,key_path:$key}},
+        {type:"shadowsocks",tag:"ss2022-in",listen:$listen,listen_port:$ssport,method:"2022-blake3-aes-128-gcm",password:$sspass}
+      ],
+      outbounds:[{type:"direct",tag:"direct"}]
+    }' > "$CONF"
   chmod 600 "$CONF"
+  "$BIN" check -c "$CONF"
   if has systemctl; then
     cat >/etc/systemd/system/sing-box.service <<'UNIT'
 [Unit]
@@ -148,7 +183,6 @@ LimitNOFILE=infinity
 WantedBy=multi-user.target
 UNIT
     systemctl daemon-reload
-    "$BIN" check -c "$CONF"
     systemctl enable --now "$SERVICE"
   elif has rc-update; then
     cat >/etc/init.d/sing-box <<'INIT'
@@ -162,38 +196,80 @@ error_log="/var/log/sing-box.err"
 depend() { need net; }
 INIT
     chmod +x /etc/init.d/sing-box
-    "$BIN" check -c "$CONF"
     rc-update add sing-box default
     rc-service sing-box restart || rc-service sing-box start
   else
     die "未检测到 systemd/OpenRC，已安装文件但无法注册服务"
   fi
 }
+
 write_clients(){
-  local safehost; safehost="$NODE_HOST"
-  local uri_host="$safehost"; [[ "$uri_host" == *:* ]] && uri_host="[$uri_host]"
-  local qpass qobfs qsni
+  local uri_host="$NODE_HOST"
+  [[ "$uri_host" == *:* ]] && uri_host="[$uri_host]"
+  local qpass qobfs qsni qtpass qrsni
   qpass="$(urlencode "$PASSWORD")"; qobfs="$(urlencode "$OBFS_PASSWORD")"; qsni="$(urlencode "$SNI")"
+  qtpass="$(urlencode "$TROJAN_PASSWORD")"; qrsni="$(urlencode "$REALITY_SNI")"
   local insecure_param=""; $INSECURE && insecure_param="&insecure=1"
   printf 'hysteria2://%s@%s:%s/?obfs=salamander&obfs-password=%s&sni=%s%s#HY2-%s\n' \
-    "$qpass" "$uri_host" "$PORT" "$qobfs" "$qsni" "$insecure_param" "$safehost" > "$EXPORT_DIR/hy2.txt"
-  jq -n --arg server "$safehost" --argjson port "$PORT" --arg pass "$PASSWORD" \
-    --arg obfs "$OBFS_PASSWORD" --arg sni "$SNI" --argjson insecure "$INSECURE" \
-    '{outbounds:[{type:"hysteria2",tag:"HY2",server:$server,server_port:$port,password:$pass,obfs:{type:"salamander",password:$obfs},tls:{enabled:true,server_name:$sni,insecure:$insecure}}]}' > "$EXPORT_DIR/sing-box-client.json"
+    "$qpass" "$uri_host" "$PORT" "$qobfs" "$qsni" "$insecure_param" "$NODE_HOST" > "$EXPORT_DIR/hy2.txt"
+  printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#VLESS-Reality-%s\n' \
+    "$VLESS_UUID" "$uri_host" "$VLESS_PORT" "$qrsni" "$REALITY_PUBLIC" "$REALITY_SHORT_ID" "$NODE_HOST" > "$EXPORT_DIR/vless-reality.txt"
+  printf 'trojan://%s@%s:%s?security=tls&sni=%s%s#Trojan-TLS-%s\n' \
+    "$qtpass" "$uri_host" "$TROJAN_PORT" "$qsni" "$insecure_param" "$NODE_HOST" > "$EXPORT_DIR/trojan.txt"
+  local ss_userinfo
+  ss_userinfo="$(printf '2022-blake3-aes-128-gcm:%s' "$SS_PASSWORD" | base64 | tr -d '\n')"
+  printf 'ss://%s@%s:%s#SS2022-%s\n' "$ss_userinfo" "$uri_host" "$SS_PORT" "$NODE_HOST" > "$EXPORT_DIR/shadowsocks-2022.txt"
+  cat "$EXPORT_DIR/hy2.txt" "$EXPORT_DIR/vless-reality.txt" "$EXPORT_DIR/trojan.txt" "$EXPORT_DIR/shadowsocks-2022.txt" > "$EXPORT_DIR/all-nodes.txt"
+  jq -n --arg host "$NODE_HOST" --argjson hp "$PORT" --arg hpass "$PASSWORD" --arg obfs "$OBFS_PASSWORD" --arg hsni "$SNI" --argjson insecure "$INSECURE" \
+    --arg uuid "$VLESS_UUID" --argjson vp "$VLESS_PORT" --arg rsni "$REALITY_SNI" --arg rpub "$REALITY_PUBLIC" --arg rsid "$REALITY_SHORT_ID" \
+    --arg tpass "$TROJAN_PASSWORD" --argjson tp "$TROJAN_PORT" --arg ss "$SS_PASSWORD" --argjson ssp "$SS_PORT" \
+    '{outbounds:[
+      {type:"hysteria2",tag:"HY2",server:$host,server_port:$hp,password:$hpass,obfs:{type:"salamander",password:$obfs},tls:{enabled:true,server_name:$hsni,insecure:$insecure}},
+      {type:"vless",tag:"VLESS-Reality",server:$host,server_port:$vp,uuid:$uuid,flow:"xtls-rprx-vision",tls:{enabled:true,server_name:$rsni,utls:{enabled:true,fingerprint:"chrome"},reality:{enabled:true,public_key:$rpub,short_id:$rsid}}},
+      {type:"trojan",tag:"Trojan-TLS",server:$host,server_port:$tp,password:$tpass,tls:{enabled:true,server_name:$hsni,insecure:$insecure}},
+      {type:"shadowsocks",tag:"SS-2022",server:$host,server_port:$ssp,method:"2022-blake3-aes-128-gcm",password:$ss}
+    ]}' > "$EXPORT_DIR/sing-box-client.json"
   cat >"$EXPORT_DIR/clash-meta.yaml" <<EOF
 proxies:
-  - name: HY2-$safehost
+  - name: HY2-$NODE_HOST
     type: hysteria2
-    server: $safehost
+    server: $NODE_HOST
     port: $PORT
     password: "$PASSWORD"
     obfs: salamander
     obfs-password: "$OBFS_PASSWORD"
     sni: "$SNI"
     skip-cert-verify: $INSECURE
+  - name: VLESS-Reality-$NODE_HOST
+    type: vless
+    server: $NODE_HOST
+    port: $VLESS_PORT
+    uuid: $VLESS_UUID
+    network: tcp
+    tls: true
+    servername: $REALITY_SNI
+    client-fingerprint: chrome
+    flow: xtls-rprx-vision
+    reality-opts:
+      public-key: $REALITY_PUBLIC
+      short-id: $REALITY_SHORT_ID
+  - name: Trojan-TLS-$NODE_HOST
+    type: trojan
+    server: $NODE_HOST
+    port: $TROJAN_PORT
+    password: "$TROJAN_PASSWORD"
+    sni: $SNI
+    skip-cert-verify: $INSECURE
+  - name: SS-2022-$NODE_HOST
+    type: ss
+    server: $NODE_HOST
+    port: $SS_PORT
+    cipher: 2022-blake3-aes-128-gcm
+    password: "$SS_PASSWORD"
 EOF
   chmod 600 "$EXPORT_DIR"/*
 }
+
 tune_kernel(){
   say "应用基础网络优化（不强制修改不支持的内核参数）"
   mkdir -p /etc/sysctl.d
@@ -276,16 +352,16 @@ show_result(){
   echo
   say "安装完成"
   echo "节点地址：$NODE_HOST"
-  echo "UDP 端口：$PORT"
+  echo "HY2 UDP 端口：$PORT；VLESS Reality TCP：$VLESS_PORT；Trojan TLS TCP：$TROJAN_PORT；SS2022 TCP/UDP：$SS_PORT"
   echo "密码：$PASSWORD"
   echo "混淆密码：$OBFS_PASSWORD"
   echo "证书验证跳过：$INSECURE"
-  echo "节点链接：$EXPORT_DIR/hy2.txt"
+  echo "节点链接集合：$EXPORT_DIR/all-nodes.txt"\n  echo "单协议链接：hy2.txt / vless-reality.txt / trojan.txt / shadowsocks-2022.txt"
   echo "sing-box 客户端配置：$EXPORT_DIR/sing-box-client.json"
   echo "Clash Meta 配置：$EXPORT_DIR/clash-meta.yaml"
   echo "服务状态：systemctl status sing-box（OpenRC 使用 rc-service sing-box status）"
   echo "更新命令：/usr/local/sbin/sing-box-update"
-  echo "注意：自签名 IP 证书对应的客户端配置已设置 insecure=true。"
+  echo "注意：自签名 IP 证书对应的 HY2/Trojan 客户端配置已设置 insecure=true；VLESS Reality 使用独立密钥。"\n  echo "请在云厂商安全组和系统防火墙放行以上端口（HY2 UDP、SS TCP/UDP、VLESS/Trojan TCP）。"
 }
 main(){
   need_root
@@ -294,6 +370,7 @@ main(){
   detect_ips
   choose_host
   choose_port
+  choose_protocols
   choose_auth
   local ver; ver="$(latest_release)" || die "无法获取 sing-box 最新版本"
   download_binary "$ver" || die "sing-box 下载或安装失败"
