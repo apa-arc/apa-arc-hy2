@@ -27,7 +27,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/apa-arc/apa-arc-hy2/main/ins
 
 安装后生成在服务器 `/root/sing-box/`：
 
-- `all-nodes.txt`：四种协议的完整节点链接集合
+- `all-nodes.txt`：四种协议的完整节点链接集合\n- `subscription.txt`：Base64 编码订阅内容
 - `hy2.txt`：HY2 节点 URI
 - `vless-reality.txt`：VLESS Reality 节点 URI
 - `trojan.txt`：Trojan TLS 节点 URI
