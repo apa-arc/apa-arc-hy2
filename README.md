@@ -8,11 +8,13 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/apa-arc/apa-arc-hy2/main/install.sh)
 ```
 
+每次运行都会先从 GitHub `main` 分支获取最新 `install.sh`，通过 Bash 语法检查后再执行；获取失败或检查不通过时会停止，不会悄悄运行旧脚本。安装命令长期固定不变。
+
 ## 当前脚本功能
 
 - 自动识别 Debian、Ubuntu、Alpine、RHEL/CentOS/Rocky/AlmaLinux/Fedora 系统及 CPU 架构
-- 自动检测公网 IPv4 / IPv6，并支持自动选择或手动输入节点 IP / 域名
-- 安装时由用户手动输入 HY2 UDP、VLESS Reality TCP、Trojan TLS TCP 端口；校验端口范围并检查冲突，不自动使用预设端口
+- 自动检测公网 IPv4 / IPv6，并由用户选择可用的 IP 类型
+- 安装时只需输入一个起始端口：HY2 使用起始端口，VLESS Reality 自动递进 +10，Trojan TLS 自动递进 +20；校验端口范围并检查冲突
 - 支持域名 Let's Encrypt 证书（HTTP-01，需要 TCP 80 可访问）或自动生成带 IP SAN 的自签名证书
 - 自动获取并安装 sing-box 最新正式版
 - 部署三种协议：Hysteria 2 + Salamander、VLESS Reality、Trojan TLS
