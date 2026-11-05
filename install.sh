@@ -357,12 +357,15 @@ show_result(){
   echo "密码：$PASSWORD"
   echo "混淆密码：$OBFS_PASSWORD"
   echo "证书验证跳过：$INSECURE"
-  echo "节点链接集合：$EXPORT_DIR/all-nodes.txt"\n  echo "Base64 订阅：$EXPORT_DIR/subscription.txt"\n  echo "单协议链接：hy2.txt / vless-reality.txt / trojan.txt / shadowsocks-2022.txt"
+  echo "节点链接集合：$EXPORT_DIR/all-nodes.txt"
+  echo "Base64 订阅：$EXPORT_DIR/subscription.txt"
+  echo "单协议链接：hy2.txt / vless-reality.txt / trojan.txt / shadowsocks-2022.txt"
   echo "sing-box 客户端配置：$EXPORT_DIR/sing-box-client.json"
   echo "Clash Meta 配置：$EXPORT_DIR/clash-meta.yaml"
   echo "服务状态：systemctl status sing-box（OpenRC 使用 rc-service sing-box status）"
   echo "更新命令：/usr/local/sbin/sing-box-update"
-  echo "注意：自签名 IP 证书对应的 HY2/Trojan 客户端配置已设置 insecure=true；VLESS Reality 使用独立密钥。"\n  echo "请在云厂商安全组和系统防火墙放行以上端口（HY2 UDP、SS TCP/UDP、VLESS/Trojan TCP）。"
+  echo "注意：自签名 IP 证书对应的 HY2/Trojan 客户端配置已设置 insecure=true；VLESS Reality 使用独立密钥。"
+  echo "请在云厂商安全组和系统防火墙放行以上端口（HY2 UDP、SS TCP/UDP、VLESS/Trojan TCP）。"
 }
 main(){
   need_root
