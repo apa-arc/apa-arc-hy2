@@ -115,14 +115,14 @@ choose_host(){
   say "节点地址：$HOST（$IP_FAMILY）"
 }
 choose_port(){
-  PORT="$(ask '请输入起始端口（HY2 使用此端口，VLESS/Trojan 自动递减 10/20）：')"
-  [[ "$PORT" =~ ^[0-9]+$ ]] && ((PORT>=21 && PORT<=65535)) || die "起始端口必须为 21-65535，确保递减 20 后仍是有效端口"
-  VLESS_PORT=$((PORT - 10))
-  TROJAN_PORT=$((PORT - 20))
+  PORT="$(ask '请输入起始端口（HY2 使用此端口，VLESS/Trojan 自动递增 10/20）：')"
+  [[ "$PORT" =~ ^[0-9]+$ ]] && ((PORT>=1 && PORT<=65515)) || die "起始端口必须为 1-65515，确保递增 20 后不超过 65535"
+  VLESS_PORT=$((PORT + 10))
+  TROJAN_PORT=$((PORT + 20))
   say "端口分配：HY2 UDP=$PORT，VLESS Reality TCP=$VLESS_PORT，Trojan TLS TCP=$TROJAN_PORT"
 }
 choose_protocols(){
-  say "将配置协议节点：VLESS Reality、Trojan TLS（端口由起始端口自动递减分配）"
+  say "将配置协议节点：VLESS Reality、Trojan TLS（端口由起始端口自动递增分配）"
   REALITY_SNI="$(ask 'VLESS Reality 伪装 SNI [默认www.microsoft.com]：' www.microsoft.com)"
   [[ "$REALITY_SNI" == *.* && "$REALITY_SNI" != *://* ]] || die "Reality SNI 格式不正确"
 }
