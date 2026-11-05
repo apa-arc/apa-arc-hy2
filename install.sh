@@ -449,26 +449,30 @@ install_jd_command(){
   cat >/usr/local/bin/jd <<'JD'
 #!/usr/bin/env bash
 set -euo pipefail
-EXPORT_DIR=/root/sing-box
-show_file(){
-  local title="$1" file="$2"
-  echo
-  echo "===== $title ====="
-  if [[ -s "$file" ]]; then
-    cat "$file"
-  else
-    echo "文件不存在或为空：$file"
-  fi
-}
+FILE=/root/sing-box/all-nodes.txt
 case "${1:-show}" in
   show|nodes)
     echo "========== sing-box 节点列表 =========="
-    show_file "HY2" "$EXPORT_DIR/hy2.txt"
-    show_file "VLESS-Reality" "$EXPORT_DIR/vless-reality.txt"
-    show_file "Trojan-TLS" "$EXPORT_DIR/trojan.txt"
-    show_file "全部节点集合" "$EXPORT_DIR/all-nodes.txt"
+    if [[ ! -s "$FILE" ]]; then
+      echo "节点集合不存在或为空：$FILE"
+      exit 1
+    fi
+    # Read the combined list exactly once; discard malformed/empty entries
+    # and keep at most one complete URI for each supported protocol.
+    awk '
+      /^(hysteria2|vless|trojan):\/\// {
+        scheme=$0
+        sub(/:\/\/.*/, "", scheme)
+        if (seen[scheme]++) next
+        if ($0 !~ /@[^:]+:[0-9]+/) next
+        if (scheme == "hysteria2" && $0 !~ /obfs-password=[^&]+/) next
+        if (scheme == "vless" && ($0 !~ /pbk=[^&]+/ || $0 !~ /sid=[^&]+/)) next
+        if (scheme == "trojan" && $0 !~ /security=tls/) next
+        print
+      }
+    ' "$FILE"
     echo
-    echo "提示：已取消 Base64 订阅；请复制对应协议的完整节点链接导入客户端。"
+    echo "共显示有效节点；每种协议最多一条。"
     ;;
   *)
     echo "用法：jd（显示全部节点）或 jd nodes"
@@ -477,7 +481,7 @@ case "${1:-show}" in
 esac
 JD
   chmod 0755 /usr/local/bin/jd
-  say "节点查看命令已安装：输入 jd 即可显示全部节点链接。"
+  say "节点查看命令已安装：输入 jd 即可显示有效节点（每种协议仅一条）。"
 }
 
 show_result(){
