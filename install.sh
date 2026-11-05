@@ -302,38 +302,59 @@ SYS
   if sysctl net.core.default_qdisc 2>/dev/null | grep -q fq; then say "FQ 队列已设置"; fi
 }
 install_update_timer(){
-  if has systemctl; then
-    cat >/usr/local/sbin/sing-box-update <<'UPDATE'
+  # Install a manual updater on every supported init system.
+  cat >/usr/local/sbin/sing-box-update <<'UPDATE'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 BIN=/usr/local/bin/sing-box
 CONF=/etc/sing-box/config.json
 BACK=/var/backups/sing-box
 mkdir -p "$BACK"
-command -v jq >/dev/null || exit 1
+command -v jq >/dev/null || { echo "缺少 jq"; exit 1; }
+command -v curl >/dev/null || { echo "缺少 curl"; exit 1; }
 . /etc/os-release
+OS_ID="${ID,,}"
 ARCH="$(uname -m)"
-case "$ARCH" in x86_64) A=amd64;; aarch64) A=arm64;; armv7l) A=armv7;; *) exit 1;; esac
-V="$(curl -fsSL https://api.github.com/repos/SagerNet/sing-box/releases/latest | jq -er '.tag_name' | sed 's/^v//')"
+case "$ARCH" in x86_64|amd64) A=amd64;; aarch64|arm64) A=arm64;; armv7l) A=armv7;; *) echo "不支持的架构：$ARCH"; exit 1;; esac
+LIBC_SUFFIX=""
+[[ "$OS_ID" == "alpine" ]] && LIBC_SUFFIX="-musl"
+V="$(curl -fsSL --retry 3 https://api.github.com/repos/SagerNet/sing-box/releases/latest | jq -er '.tag_name' | sed 's/^v//')"
 CUR="$("$BIN" version | awk 'NR==1{print $3}' | sed 's/^v//')"
-[[ "$V" == "$CUR" ]] && exit 0
+if [[ "$V" == "$CUR" ]]; then echo "sing-box 已是最新版本：$CUR"; exit 0; fi
+echo "准备更新 sing-box：$CUR -> $V"
 T="$(mktemp -d)"; trap 'rm -rf "$T"' EXIT
-curl -fL --retry 3 "https://github.com/SagerNet/sing-box/releases/download/v$V/sing-box-$V-linux-$A.tar.gz" -o "$T/sb.tgz"
+URL="https://github.com/SagerNet/sing-box/releases/download/v$V/sing-box-$V-linux-$A$LIBC_SUFFIX.tar.gz"
+curl -fL --retry 3 "$URL" -o "$T/sb.tgz"
 tar -xzf "$T/sb.tgz" -C "$T"
 C="$(find "$T" -type f -name sing-box -perm -u+x | head -n1)"
-[[ -n "$C" ]]
+[[ -n "$C" ]] || { echo "压缩包中未找到 sing-box"; exit 1; }
+"$C" version >/dev/null 2>&1 || { echo "新版本二进制无法在当前系统运行"; exit 1; }
 "$C" check -c "$CONF"
-cp -a "$BIN" "$BACK/sing-box.$(date +%Y%m%d%H%M%S)"
+STAMP="$(date +%Y%m%d%H%M%S)"
+cp -a "$BIN" "$BACK/sing-box.$STAMP"
 install -m 0755 "$C" "$BIN"
-if systemctl restart sing-box && systemctl is-active --quiet sing-box; then
+restart_service(){
+  if command -v systemctl >/dev/null 2>&1; then
+    systemctl restart sing-box && systemctl is-active --quiet sing-box
+  elif command -v rc-service >/dev/null 2>&1; then
+    rc-service sing-box restart
+  else
+    echo "未找到 systemd 或 OpenRC"; return 1
+  fi
+}
+if restart_service; then
+  echo "sing-box 更新成功：$V"
   find "$BACK" -type f -name 'sing-box.*' -printf '%T@ %p\n' | sort -nr | awk 'NR>5{print $2}' | xargs -r rm -f
 else
-  L="$(ls -1t "$BACK"/sing-box.* | head -n1)"
-  cp -a "$L" "$BIN"; systemctl restart sing-box
+  echo "更新后服务启动失败，正在回滚"
+  cp -a "$BACK/sing-box.$STAMP" "$BIN"
+  restart_service || true
   exit 1
 fi
 UPDATE
-    chmod 700 /usr/local/sbin/sing-box-update
+  chmod 700 /usr/local/sbin/sing-box-update
+
+  if has systemctl; then
     cat >/etc/systemd/system/sing-box-update.service <<'UNIT'
 [Unit]
 Description=Check and update sing-box
@@ -353,8 +374,9 @@ WantedBy=timers.target
 UNIT
     systemctl daemon-reload
     systemctl enable --now sing-box-update.timer
+    say "已启用每周自动检查更新；也可手动运行 sing-box-update"
   else
-    warn "非 systemd 系统未自动创建更新定时器；可手动运行 /usr/local/sbin/sing-box-update"
+    warn "当前为 OpenRC 系统；已安装手动更新命令：sing-box-update（未启用定时自动更新）"
   fi
 }
 show_result(){
