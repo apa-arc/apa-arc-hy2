@@ -287,14 +287,20 @@ write_clients(){
   qpass="$(urlencode "$PASSWORD")"; qobfs="$(urlencode "$OBFS_PASSWORD")"; qsni="$(urlencode "$SNI")"
   qtpass="$(urlencode "$TROJAN_PASSWORD")"; qrsni="$(urlencode "$REALITY_SNI")"
   local insecure_param=""; $INSECURE && insecure_param="&insecure=1"
+  # Write each protocol to a fresh temporary file, then atomically replace it.
+  # This prevents stale/legacy blank entries from surviving a previous install.
   printf 'hysteria2://%s@%s:%s/?obfs=salamander&obfs-password=%s&sni=%s%s#HY2\n' \
-    "$qpass" "$uri_host" "$PORT" "$qobfs" "$qsni" "$insecure_param" "$NODE_HOST" > "$EXPORT_DIR/hy2.txt"
+    "$qpass" "$uri_host" "$PORT" "$qobfs" "$qsni" "$insecure_param" > "$EXPORT_DIR/hy2.txt.tmp"
   printf 'vless://%s@%s:%s?encryption=none&flow=xtls-rprx-vision&security=reality&sni=%s&fp=chrome&pbk=%s&sid=%s&type=tcp#VLESS-Reality\n' \
-    "$VLESS_UUID" "$uri_host" "$VLESS_PORT" "$qrsni" "$REALITY_PUBLIC" "$REALITY_SHORT_ID" "$NODE_HOST" > "$EXPORT_DIR/vless-reality.txt"
+    "$VLESS_UUID" "$uri_host" "$VLESS_PORT" "$qrsni" "$REALITY_PUBLIC" "$REALITY_SHORT_ID" > "$EXPORT_DIR/vless-reality.txt.tmp"
   printf 'trojan://%s@%s:%s?security=tls&sni=%s%s#Trojan-TLS\n' \
-    "$qtpass" "$uri_host" "$TROJAN_PORT" "$qsni" "$insecure_param" "$NODE_HOST" > "$EXPORT_DIR/trojan.txt"
-  # Build the combined node list before encoding it as a subscription.
+    "$qtpass" "$uri_host" "$TROJAN_PORT" "$qsni" "$insecure_param" > "$EXPORT_DIR/trojan.txt.tmp"
+  mv -f "$EXPORT_DIR/hy2.txt.tmp" "$EXPORT_DIR/hy2.txt"
+  mv -f "$EXPORT_DIR/vless-reality.txt.tmp" "$EXPORT_DIR/vless-reality.txt"
+  mv -f "$EXPORT_DIR/trojan.txt.tmp" "$EXPORT_DIR/trojan.txt"
+  # Rebuild the combined file from the three freshly replaced single-node files.
   cat "$EXPORT_DIR/hy2.txt" "$EXPORT_DIR/vless-reality.txt" "$EXPORT_DIR/trojan.txt" > "$EXPORT_DIR/all-nodes.txt"
+  [[ "$(wc -l < "$EXPORT_DIR/all-nodes.txt")" -eq 3 ]] || die "节点集合异常：预期 3 行有效节点"
   [[ -s "$EXPORT_DIR/all-nodes.txt" ]] || die "节点集合生成失败：all-nodes.txt 为空"
   rm -f "$EXPORT_DIR/subscription.txt"
   jq -n --arg host "$NODE_HOST" --argjson hp "$PORT" --arg hpass "$PASSWORD" --arg obfs "$OBFS_PASSWORD" --arg hsni "$SNI" --argjson insecure "$INSECURE" \
@@ -491,13 +497,8 @@ show_result(){
   echo "密码：$PASSWORD"
   echo "混淆密码：$OBFS_PASSWORD"
   echo "证书验证跳过：$INSECURE"
-  echo "===== 三协议节点链接（别名仅显示协议名称）====="
-  echo "[HY2]"
-  cat "$EXPORT_DIR/hy2.txt"
-  echo "[VLESS-Reality]"
-  cat "$EXPORT_DIR/vless-reality.txt"
-  echo "[Trojan-TLS]"
-  cat "$EXPORT_DIR/trojan.txt"
+  echo "===== 三协议节点链接（每种协议仅一条）====="
+  cat "$EXPORT_DIR/all-nodes.txt"
   echo
   echo "节点链接集合：$EXPORT_DIR/all-nodes.txt"
   echo "sing-box 客户端配置：$EXPORT_DIR/sing-box-client.json"
