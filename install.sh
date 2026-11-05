@@ -364,6 +364,8 @@ SYS
   if sysctl net.core.default_qdisc 2>/dev/null | grep -q fq; then say "FQ 队列已设置"; fi
 }
 install_update_timer(){
+  # Ensure the target directory exists; minimal Alpine images may omit /usr/local/sbin.
+  install -d -m 0755 /usr/local/sbin
   # Install a manual updater on every supported init system.
   cat >/usr/local/sbin/sing-box-update <<'UPDATE'
 #!/usr/bin/env bash
@@ -415,6 +417,7 @@ else
 fi
 UPDATE
   chmod 700 /usr/local/sbin/sing-box-update
+  [[ -x /usr/local/sbin/sing-box-update ]] || die "更新脚本创建失败：/usr/local/sbin/sing-box-update"
 
   if has systemctl; then
     cat >/etc/systemd/system/sing-box-update.service <<'UNIT'
