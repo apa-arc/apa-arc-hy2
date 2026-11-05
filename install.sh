@@ -486,7 +486,8 @@ main(){
 }
 case "${1:-install}" in
   install) main ;;
+  repair-update) need_root; install_update_timer; say "更新脚本已重新安装；现有节点配置和密码未更改。" ;;
   update) need_root; /usr/local/sbin/sing-box-update ;;
   status) systemctl status sing-box --no-pager 2>/dev/null || rc-service sing-box status ;;
-  *) echo "用法：bash install.sh [install|update|status]"; exit 2 ;;
+  *) echo "用法：bash install.sh [install|repair-update|update|status]"; exit 2 ;;
 esac
