@@ -245,7 +245,7 @@ download_binary(){
     rm -rf "$tmp"
     return 1
   fi
-  member="$(tar -tzf "$tmp/sb.tar.gz" | awk '$NF == "sing-box" {print; exit}')"
+  member="$(tar -tzf "$tmp/sb.tar.gz" | awk -F/ '$NF == "sing-box" {print; exit}')"
   if [[ -z "$member" ]]; then
     warn "压缩包中没有 sing-box 可执行文件"
     rm -rf "$tmp"
@@ -454,7 +454,7 @@ echo "[1/4] 下载 sing-box v$V"
 curl -fL --retry 3 --connect-timeout 15 "$URL" -o "$T/sb.tgz"
 echo "[2/4] 检查压缩包完整性"
 tar -tzf "$T/sb.tgz" >/dev/null
-M="$(tar -tzf "$T/sb.tgz" | awk '$NF == "sing-box" {print; exit}')"
+M="$(tar -tzf "$T/sb.tgz" | awk -F/ '$NF == "sing-box" {print; exit}')"
 [[ -n "$M" ]] || { echo "压缩包中未找到 sing-box"; exit 1; }
 echo "[3/4] 直接提取二进制（不展开整个目录）"
 tar -xOzf "$T/sb.tgz" "$M" > "$T/sing-box.new"
