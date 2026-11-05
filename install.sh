@@ -133,16 +133,23 @@ latest_release(){
     jq -er '.tag_name' | sed 's/^v//'
 }
 download_binary(){
-  local version="$1" tmp url
+  local version="$1" tmp url libc_suffix=""
   tmp="$(mktemp -d)"
-  url="https://github.com/SagerNet/sing-box/releases/download/v${version}/sing-box-${version}-linux-${SB_ARCH}.tar.gz"
-  say "下载 sing-box v$version"
+  # Alpine uses musl libc; download the matching official musl build.
+  [[ "$OS_ID" == "alpine" ]] && libc_suffix="-musl"
+  url="https://github.com/SagerNet/sing-box/releases/download/v${version}/sing-box-${version}-linux-${SB_ARCH}${libc_suffix}.tar.gz"
+  say "下载 sing-box v$version（${OS_ID} / ${SB_ARCH}${libc_suffix}）"
   curl -fL --retry 3 "$url" -o "$tmp/sb.tar.gz" || { rm -rf "$tmp"; return 1; }
   tar -xzf "$tmp/sb.tar.gz" -C "$tmp"
   local candidate; candidate="$(find "$tmp" -type f -name sing-box -perm -u+x | head -n1)"
   [[ -n "$candidate" ]] || { rm -rf "$tmp"; return 1; }
   install -m 0755 "$candidate" "${tmp}/sing-box.new"
-  "${tmp}/sing-box.new" version >/dev/null || { rm -rf "$tmp"; return 1; }
+  # Validate the extracted binary before replacing any existing installation.
+  "${tmp}/sing-box.new" version >/dev/null 2>&1 || {
+    warn "sing-box 二进制无法在当前系统运行（系统 libc 或架构可能不匹配）"
+    rm -rf "$tmp"
+    return 1
+  }
   mkdir -p "$(dirname "$BIN")"
   if [[ -x "$BIN" ]]; then cp -a "$BIN" "${BIN}.bak"; fi
   install -m 0755 "${tmp}/sing-box.new" "$BIN"
