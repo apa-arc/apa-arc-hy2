@@ -444,6 +444,42 @@ UNIT
     warn "当前为 OpenRC 系统；已安装手动更新命令：sing-box-update（未启用定时自动更新）"
   fi
 }
+install_jd_command(){
+  install -d -m 0755 /usr/local/bin
+  cat >/usr/local/bin/jd <<'JD'
+#!/usr/bin/env bash
+set -euo pipefail
+EXPORT_DIR=/root/sing-box
+show_file(){
+  local title="$1" file="$2"
+  echo
+  echo "===== $title ====="
+  if [[ -s "$file" ]]; then
+    cat "$file"
+  else
+    echo "文件不存在或为空：$file"
+  fi
+}
+case "${1:-show}" in
+  show|nodes)
+    echo "========== sing-box 节点列表 =========="
+    show_file "HY2" "$EXPORT_DIR/hy2.txt"
+    show_file "VLESS-Reality" "$EXPORT_DIR/vless-reality.txt"
+    show_file "Trojan-TLS" "$EXPORT_DIR/trojan.txt"
+    show_file "全部节点集合" "$EXPORT_DIR/all-nodes.txt"
+    echo
+    echo "提示：已取消 Base64 订阅；请复制对应协议的完整节点链接导入客户端。"
+    ;;
+  *)
+    echo "用法：jd（显示全部节点）或 jd nodes"
+    exit 2
+    ;;
+esac
+JD
+  chmod 0755 /usr/local/bin/jd
+  say "节点查看命令已安装：输入 jd 即可显示全部节点链接。"
+}
+
 show_result(){
   echo
   say "安装完成"
@@ -487,6 +523,7 @@ main(){
   fi
   configure_service
   write_clients
+  install_jd_command
   tune_kernel
   install_update_timer
   show_result
@@ -494,7 +531,8 @@ main(){
 case "${1:-install}" in
   install) main ;;
   repair-update) need_root; install_update_timer; say "更新脚本已重新安装；现有节点配置和密码未更改。" ;;
+  install-jd) need_root; install_jd_command ;;
   update) need_root; /usr/local/sbin/sing-box-update ;;
   status) systemctl status sing-box --no-pager 2>/dev/null || rc-service sing-box status ;;
-  *) echo "用法：bash install.sh [install|repair-update|update|status]"; exit 2 ;;
+  *) echo "用法：bash install.sh [install|install-jd|repair-update|update|status]"; exit 2 ;;
 esac
