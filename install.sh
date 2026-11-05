@@ -463,11 +463,11 @@ case "${1:-show}" in
       /^(hysteria2|vless|trojan):\/\// {
         scheme=$0
         sub(/:\/\/.*/, "", scheme)
-        if (seen[scheme]++) next
         if ($0 !~ /@[^:]+:[0-9]+/) next
         if (scheme == "hysteria2" && $0 !~ /obfs-password=[^&]+/) next
         if (scheme == "vless" && ($0 !~ /pbk=[^&]+/ || $0 !~ /sid=[^&]+/)) next
         if (scheme == "trojan" && $0 !~ /security=tls/) next
+        if (seen[scheme]++) next
         print
       }
     ' "$FILE"
